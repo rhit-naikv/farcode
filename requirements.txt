@@ -1,0 +1,9 @@
+langchain
+langchain-groq
+langchain-community
+typer
+rich
+python-dotenv
+urllib3
+pyopenssl
+cryptography
