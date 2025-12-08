@@ -1,7 +1,5 @@
 # Farcode
 
-Far stands for Fuck Ass Robot
-
 A command-line chat application that leverages LangChain and the Groq API to interact with AI models.
 
 ## Overview

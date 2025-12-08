@@ -1,6 +1,8 @@
 langchain
 langchain-groq
 langchain-community
+duckduckgo-search
+ddgs
 typer
 rich
 python-dotenv
