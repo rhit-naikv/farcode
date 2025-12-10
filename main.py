@@ -1,17 +1,22 @@
 import typer
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain_community.tools import DuckDuckGoSearchRun
+
+# Import community file tools
+from langchain_community.tools import (
+    DuckDuckGoSearchRun,
+    ListDirectoryTool,
+    ReadFileTool,
+    WriteFileTool,
+)
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_groq import ChatGroq
 from rich.console import Console
 
-# Import our custom secure tools
-from tools.file_tools import (
-    list_directory,
-    read_file,
-    write_file,
-)
+# Initialize the community file tools
+list_directory = ListDirectoryTool()
+read_file = ReadFileTool()
+write_file = WriteFileTool()
 
 load_dotenv()
 

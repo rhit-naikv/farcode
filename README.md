@@ -4,7 +4,7 @@ A command-line chat application that leverages LangChain and AI models to intera
 
 ## Overview
 
-Farcode is a terminal-based chat interface that allows you to interact with AI models. It supports both single-prompt execution and interactive chat sessions with conversation history. The application includes secure file tools and web search capabilities.
+Farcode is a terminal-based chat interface that allows you to interact with AI models. It provides an interactive chat session with conversation history. The application includes community-provided file tools and web search capabilities.
 
 ## Features
 
@@ -53,12 +53,6 @@ Run without any arguments to start an interactive chat session:
 python main.py
 ```
 
-### Single Prompt
-Provide a single prompt as an argument:
-```bash
-python main.py "What is the weather today?"
-```
-
 ## Available Tools
 
 The application provides several tools for the AI agent to use:
@@ -80,7 +74,7 @@ The application provides several tools for the AI agent to use:
 
 The application uses:
 - LangChain for LLM orchestration
-- Custom secure file tools for system interaction
+- LangChain community file tools for system interaction
 - DuckDuckGo search integration for web queries
 - In-memory session storage for conversation history
 - Typer for command-line interface
