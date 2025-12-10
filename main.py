@@ -1,5 +1,3 @@
-import os
-
 import typer
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -21,21 +19,17 @@ app = typer.Typer()
 console = Console()
 
 # Initialize the LLM
-llm = ChatGroq(model="llama-3.3-70b-versatile")
-
-# Initialize our secure tools
-read_file_tool = read_file
-write_file_tool = write_file
-list_directory_tool = list_directory
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.3)
 
 # Initialize the search tool
 search_tool = DuckDuckGoSearchRun()
 
 # Create the full list of tools
-tools = [read_file_tool, write_file_tool, list_directory_tool, search_tool]
+tools = [read_file, write_file, list_directory, search_tool]
 
 # Define the system message for the agent
-system_message = "You are an expert Senior AI Software Engineer. You must use the available tools to complete complex coding tasks, write files, read documentation, and search the web. You have access to read files, write files, list directories, and search the web. Use these tools as needed to help the user with their software engineering tasks. All file operations are restricted to the current working directory and its subdirectories."
+system_message = """You are an expert Senior AI Software Engineer. You must use the available tools to complete complex coding tasks, write files, read documentation, and search the web. You have access to read files, write files, list directories, and search the web. Use these tools as needed to help the user with their software engineering tasks. All file operations are restricted to the current working directory and its subdirectories.
+IMPORTANT: When calling tools, you must return valid JSON responses in the proper OpenAI function calling format."""
 
 # Create the agent using the new LangChain approach
 agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
@@ -64,15 +58,41 @@ def main():
             messages.append(HumanMessage(content=user_input))
 
             # Invoke the agent with the messages
-            response = agent.invoke({"messages": messages})
+            response = agent.invoke(
+                {"messages": messages}, config={"recursion_limit": 15}
+            )
 
             # Add the agent's response to the message history
-            ai_response = response["messages"][-1].content
-            messages.append(AIMessage(content=ai_response))
+            response_messages = response.get("messages", [])
+            messages = response_messages
 
-            console.print(f"Response: {ai_response}", style="blue")
+            # Find the last AI message to display
+            ai_response = None
+            for msg in reversed(response_messages):
+                if isinstance(msg, AIMessage) and msg.content:
+                    ai_response = msg.content
+                    break
+
+            if ai_response:
+                console.print(f"Response: {ai_response}", style="blue")
+            else:
+                console.print("\nNo response content generated.", style="yellow")
+
         except Exception as e:
-            console.print(f"Error: {str(e)}", style="red")
+            error_msg = str(e)
+            console.print(f"\nError: {error_msg}", style="red")
+
+            # Provide helpful error messages
+            if "tool_use_failed" in error_msg:
+                console.print("\nℹ️  Tool calling error detected...", style="yellow")
+            elif "400" in error_msg:
+                console.print("\nℹ️  API error...", style="yellow")
+            elif "429" in error_msg or "Too Many Requests" in error_msg:
+                console.print("\nℹ️ Groq throttling error...", style="yellow")
+
+            # Remove the last user message on error
+            if messages and isinstance(messages[-1], HumanMessage):
+                messages.pop()
 
         console.print()
 
