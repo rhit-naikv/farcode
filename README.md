@@ -58,8 +58,18 @@ python main.py
 The application provides several tools for the AI agent to use:
 
 - **File Operations**: Read, write, and list files within the current working directory
+- **Secure Shell Commands**: Execute shell commands with security safeguards in place (whitelisted commands only)
 - **Web Search**: DuckDuckGo search integration for current information
 - **AI Model**: Currently configured with openai/gpt-oss-120b model
+
+## Security Measures
+
+To protect against potential security risks, the application implements the following safeguards:
+
+- **Secure Shell Tool**: Commands are restricted to a whitelist of safe operations, with dangerous commands (rm, mv, chmod, sudo, etc.) explicitly blocked
+- **Path Validation**: File operations are restricted to the current working directory and subdirectories
+- **Command Timeouts**: Shell commands timeout after 30 seconds to prevent resource exhaustion
+- **Output Truncation**: Response output is limited to prevent information disclosure
 
 ## Dependencies
 

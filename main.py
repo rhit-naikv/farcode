@@ -1,22 +1,11 @@
 import typer
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-
-# Import community file tools
-from langchain_community.tools import (
-    DuckDuckGoSearchRun,
-    ListDirectoryTool,
-    ReadFileTool,
-    WriteFileTool,
-)
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_groq import ChatGroq
 from rich.console import Console
 
-# Initialize the community file tools
-list_directory = ListDirectoryTool()
-read_file = ReadFileTool()
-write_file = WriteFileTool()
+from tools import getTools
 
 load_dotenv()
 
@@ -26,11 +15,8 @@ console = Console()
 # Initialize the LLM
 llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.3)
 
-# Initialize the search tool
-search_tool = DuckDuckGoSearchRun()
-
 # Create the full list of tools
-tools = [read_file, write_file, list_directory, search_tool]
+tools = getTools()
 
 # Define the system message for the agent
 system_message = """You are an expert Senior AI Software Engineer. You must use the available tools to complete complex coding tasks, write files, read documentation, and search the web. You have access to read files, write files, list directories, and search the web. Use these tools as needed to help the user with their software engineering tasks. All file operations are restricted to the current working directory and its subdirectories.
