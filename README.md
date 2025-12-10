@@ -1,22 +1,24 @@
 # Farcode
 
-A command-line chat application that leverages LangChain and the Groq API to interact with AI models.
+A command-line chat application that leverages LangChain and AI models to interact with the system and perform various tasks including file operations and web searches.
 
 ## Overview
 
-Farcode is a terminal-based chat interface that allows you to interact with AI models like Llama 3.3 70b. It supports both single-prompt execution and interactive chat sessions with conversation history.
+Farcode is a terminal-based chat interface that allows you to interact with AI models. It supports both single-prompt execution and interactive chat sessions with conversation history. The application includes secure file tools and web search capabilities.
 
 ## Features
 
 - Interactive chat mode with conversation history
 - Single-prompt execution for quick queries
+- Secure file operations (read, write, list directories)
+- Web search capabilities
 - Session-based message storage
-- Built with LangChain and Groq API
+- Built with LangChain and AI models
 
 ## Prerequisites
 
 - Python 3.8+
-- Groq API key (stored in environment variables)
+- API key for the selected model (stored in environment variables)
 
 ## Installation
 
@@ -38,9 +40,9 @@ Farcode is a terminal-based chat interface that allows you to interact with AI m
    ```
 
 4. Set up environment variables:
-   Create a `.env` file in the project root with your Groq API key:
+   Create a `.env` file in the project root with your API key:
    ```
-   GROQ_API_KEY=your_groq_api_key_here
+   GROQ_API_KEY=your_api_key_here
    ```
 
 ## Usage
@@ -57,10 +59,18 @@ Provide a single prompt as an argument:
 python main.py "What is the weather today?"
 ```
 
+## Available Tools
+
+The application provides several tools for the AI agent to use:
+
+- **File Operations**: Read, write, and list files within the current working directory
+- **Web Search**: DuckDuckGo search integration for current information
+- **AI Model**: Currently configured with openai/gpt-oss-120b model
+
 ## Dependencies
 
 - `langchain`: Framework for developing LLM applications
-- `langchain-groq`: Integration with Groq API
+- `langchain-groq`: Integration with AI model APIs
 - `langchain-community`: Community maintained LangChain integrations
 - `typer`: Library for building command-line interfaces
 - `python-dotenv`: Loads environment variables from `.env` file
@@ -70,6 +80,10 @@ python main.py "What is the weather today?"
 
 The application uses:
 - LangChain for LLM orchestration
-- Groq API with the Llama-3.3-70b-versatile model
+- Custom secure file tools for system interaction
+- DuckDuckGo search integration for web queries
 - In-memory session storage for conversation history
 - Typer for command-line interface
+- Configured with openai/gpt-oss-120b model with temperature 0.3
+- Recursive tool calling with a limit of 15 calls
+- Error handling for tool calling, API issues, and throttling
