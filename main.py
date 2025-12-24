@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_groq import ChatGroq
 from rich.console import Console
 
+from callbacks import LoadingAndApprovalCallbackHandler
 from tools import getTools
 
 load_dotenv()
@@ -37,6 +38,9 @@ def main():
     # Initialize message history
     messages = []
 
+    # Initialize approved tools set to be shared across requests in this session
+    approved_tools = set()
+
     while True:
         user_input = typer.prompt("Enter your query")
 
@@ -48,10 +52,26 @@ def main():
             # Add user message to history
             messages.append(HumanMessage(content=user_input))
 
-            # Invoke the agent with the messages
-            response = agent.invoke(
-                {"messages": messages}, config={"recursion_limit": 15}
+            # Show initial processing message
+            console.print("[green]Processing your request...[/green]")
+
+            # Create a new callback handler for each request to avoid state issues
+            # but pass the shared approved tools to maintain approval across requests
+            callback_handler = LoadingAndApprovalCallbackHandler(
+                shared_approved_tools=approved_tools
             )
+
+            # Invoke the agent with the messages and callback handler
+            response = agent.invoke(
+                {"messages": messages},
+                config={"recursion_limit": 15, "callbacks": [callback_handler]},
+            )
+
+            # Stop any remaining loading indicators from the callback handler
+            callback_handler.stop_loading()
+
+            # Show completion message
+            console.print("[green]Processing completed.[/green]")
 
             # Add the agent's response to the message history
             response_messages = response.get("messages", [])
@@ -80,6 +100,10 @@ def main():
                 console.print("\nℹ️  API error...", style="yellow")
             elif "429" in error_msg or "Too Many Requests" in error_msg:
                 console.print("\nℹ️ Groq throttling error...", style="yellow")
+            elif "was denied by user" in error_msg:
+                console.print("\n⚠️  Tool call was denied by user.", style="yellow")
+            elif "Stopping execution" in error_msg:
+                console.print("\n⚠️  Tool call was denied by user.", style="yellow")
 
             # Remove the last user message on error
             if messages and isinstance(messages[-1], HumanMessage):
