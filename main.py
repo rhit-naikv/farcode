@@ -2,10 +2,10 @@ import typer
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_groq import ChatGroq
 from rich.console import Console
 
 from callbacks import LoadingAndApprovalCallbackHandler
+from providers.get_provider import get_llm_provider
 from tools import getTools
 
 load_dotenv()
@@ -14,7 +14,7 @@ app = typer.Typer()
 console = Console()
 
 # Initialize the LLM
-llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.3)
+llm = get_llm_provider("open_router")
 
 # Create the full list of tools
 tools = getTools()
@@ -99,7 +99,7 @@ def main():
             elif "400" in error_msg:
                 console.print("\nℹ️  API error...", style="yellow")
             elif "429" in error_msg or "Too Many Requests" in error_msg:
-                console.print("\nℹ️ Groq throttling error...", style="yellow")
+                console.print("\nℹ️ throttling error...", style="yellow")
             elif "was denied by user" in error_msg:
                 console.print("\n⚠️  Tool call was denied by user.", style="yellow")
             elif "Stopping execution" in error_msg:

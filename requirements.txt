@@ -1,5 +1,7 @@
 langchain
 langchain-groq
+langchain-google-genai
+langchain-openai
 langchain-community
 langchain-experimental
 duckduckgo-search
@@ -7,6 +9,7 @@ ddgs
 typer
 rich
 python-dotenv
+pydantic
 urllib3
 pyopenssl
 cryptography
