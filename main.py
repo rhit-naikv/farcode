@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from rich.console import Console
+from rich.text import Text
 
 from callbacks import LoadingAndApprovalCallbackHandler
 from providers.get_provider import get_llm_provider
@@ -32,10 +33,19 @@ agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
 @app.command()
 def main():
     """Interactive CLI for the Senior AI Software Engineer agent."""
-    console.print(
+    # Use Rich's Text class to safely handle static content with styles
+    welcome_text = Text()
+    welcome_text.append(
         "Welcome to the Senior AI Software Engineer Agent!", style="bold green"
     )
-    console.print("Type 'exit' or 'quit' to stop the conversation.\n", style="yellow")
+    console.print(welcome_text)
+
+    # Use Rich's Text class to safely handle static content with styles
+    exit_text = Text()
+    exit_text.append(
+        "Type 'exit' or 'quit' to stop the conversation.\n", style="yellow"
+    )
+    console.print(exit_text)
 
     # Initialize message history
     messages = []
@@ -47,7 +57,10 @@ def main():
         user_input = typer.prompt("Enter your query")
 
         if user_input.lower() in ["exit", "quit"]:
-            console.print("Goodbye!", style="bold green")
+            # Use Rich's Text class to safely handle static content with styles
+            goodbye_text = Text()
+            goodbye_text.append("Goodbye!", style="bold green")
+            console.print(goodbye_text)
             break
 
         try:
@@ -87,11 +100,15 @@ def main():
                     content = message.content
                     if isinstance(content, str) and content:
                         if not has_started_printing_response:
-                            console.print("\n[blue]Response: [/blue]", end="")
+                            # Use Rich's Text class to safely handle static content with styles
+                            response_header = Text()
+                            response_header.append("\nResponse: ", style="blue")
+                            console.print(response_header, end="")
                             has_started_printing_response = True
 
                         # Print the content token by token
-                        console.print(content, end="", style="blue")
+                        # Disable markup parsing to prevent errors from AI-generated Rich markup
+                        console.print(content, end="", style="blue", markup=False)
                         full_response += content
 
                         # Force flush to ensure immediate display
@@ -104,7 +121,10 @@ def main():
             if has_started_printing_response:
                 console.print()
 
-            console.print("[green]Processing completed.[/green]")
+            # Use Rich's Text class to safely handle static content with styles
+            processing_text = Text()
+            processing_text.append("Processing completed.", style="green")
+            console.print(processing_text)
 
             # Update message history with the AI response
             if full_response:
@@ -112,19 +132,44 @@ def main():
 
         except Exception as e:
             error_msg = str(e)
-            console.print(f"\nError: {error_msg}", style="red")
+            # Disable markup parsing to prevent errors from AI-generated Rich markup in error messages
+            # Use Rich's Text class to safely handle static content with styles
+            error_text = Text()
+            error_text.append(f"\nError: {error_msg}", style="red")
+            console.print(error_text)
 
             # Provide helpful error messages
             if "tool_use_failed" in error_msg:
-                console.print("\nℹ️  Tool calling error detected...", style="yellow")
+                # Use Rich's Text class to safely handle static content with styles
+                error_help_text = Text()
+                error_help_text.append(
+                    "\nℹ️  Tool calling error detected...", style="yellow"
+                )
+                console.print(error_help_text)
             elif "400" in error_msg:
-                console.print("\nℹ️  API error...", style="yellow")
+                # Use Rich's Text class to safely handle static content with styles
+                error_help_text = Text()
+                error_help_text.append("\nℹ️  API error...", style="yellow")
+                console.print(error_help_text)
             elif "429" in error_msg or "Too Many Requests" in error_msg:
-                console.print("\nℹ️ throttling error...", style="yellow")
+                # Use Rich's Text class to safely handle static content with styles
+                error_help_text = Text()
+                error_help_text.append("\nℹ️ throttling error...", style="yellow")
+                console.print(error_help_text)
             elif "was denied by user" in error_msg:
-                console.print("\n⚠️  Tool call was denied by user.", style="yellow")
+                # Use Rich's Text class to safely handle static content with styles
+                error_help_text = Text()
+                error_help_text.append(
+                    "\n⚠️  Tool call was denied by user.", style="yellow"
+                )
+                console.print(error_help_text)
             elif "Stopping execution" in error_msg:
-                console.print("\n⚠️  Tool call was denied by user.", style="yellow")
+                # Use Rich's Text class to safely handle static content with styles
+                error_help_text = Text()
+                error_help_text.append(
+                    "\n⚠️  Tool call was denied by user.", style="yellow"
+                )
+                console.print(error_help_text)
 
             # Remove the last user message on error
             if messages and isinstance(messages[-1], HumanMessage):

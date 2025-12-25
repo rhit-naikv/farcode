@@ -104,17 +104,28 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         tool_args = input_str if isinstance(input_str, str) else str(input_str)
 
         # Show tool call details and ask for approval
+        # Use Rich's Text class to safely handle dynamic content with styles
+        panel_content = Text()
+        panel_content.append("Tool Call: ", style="bold yellow")
+        panel_content.append(tool_name, style="")
+        panel_content.append("\nArguments: ", style="bold cyan")
+        panel_content.append(
+            tool_args, style=""
+        )  # Don't apply any style to dynamic content
+
         console.print(
             Panel(
-                f"[bold yellow]Tool Call:[/bold yellow] {tool_name}\n[bold cyan]Arguments:[/bold cyan] {tool_args}",
+                panel_content,
                 border_style="yellow",
             )
         )
 
         # Ask user for approval if not already approved in this session
+        # Escape content to prevent Rich markup issues in typer prompt
+        escaped_tool_name = tool_name.replace("[", "\\[").replace("]", "\\]")
         if tool_name not in self.shared_approved_tools:
             approval = typer.prompt(
-                f"Do you want to allow '{tool_name}'? (y/Y to approve, n/N to deny, a/A to approve for all future calls)",
+                f"Do you want to allow '{escaped_tool_name}'? (y/Y to approve, n/N to deny, a/A to approve for all future calls)",
                 type=str,
                 default="y",
             ).lower()
@@ -122,13 +133,25 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
             if approval == "a":
                 # Approve for all future calls in this session
                 self.shared_approved_tools.add(tool_name)
-                console.print(
-                    f"[green]Approved '{tool_name}' for all future calls in this session.[/green]"
+                # Use Rich's Text class to safely handle dynamic content with styles
+                approval_text = Text()
+                approval_text.append("Approved '", style="green")
+                approval_text.append(
+                    tool_name, style=""
+                )  # Don't apply any style to dynamic content
+                approval_text.append(
+                    "' for all future calls in this session.", style="green"
                 )
+                console.print(approval_text)
             elif approval != "y":
-                console.print(
-                    f"[red]Denied '{tool_name}'. Skipping this tool call.[/red]"
-                )
+                # Use Rich's Text class to safely handle dynamic content with styles
+                denial_text = Text()
+                denial_text.append("Denied '", style="red")
+                denial_text.append(
+                    tool_name, style=""
+                )  # Don't apply any style to dynamic content
+                denial_text.append("'. Skipping this tool call.", style="red")
+                console.print(denial_text)
                 # Instead of raising an exception, we'll return early to avoid the tool execution
                 # Unfortunately, this approach doesn't work with LangChain's callback system
                 # The only way to stop execution is to raise an exception
@@ -136,10 +159,23 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
                     f"Tool '{tool_name}' was denied by user. Stopping execution."
                 )
         else:
-            console.print(f"[green]Using previously approved tool: {tool_name}[/green]")
+            # Use Rich's Text class to safely handle dynamic content with styles
+            approved_text = Text()
+            approved_text.append("Using previously approved tool: ", style="green")
+            approved_text.append(
+                tool_name, style=""
+            )  # Don't apply any style to dynamic content
+            console.print(approved_text)
 
         # Show loading status for tool execution
-        console.print(f"[green]Executing {tool_name}...[/green]")
+        # Use Rich's Text class to safely handle dynamic content with styles
+        execution_text = Text()
+        execution_text.append("Executing ", style="green")
+        execution_text.append(
+            tool_name, style=""
+        )  # Don't apply any style to dynamic content
+        execution_text.append("...", style="green")
+        console.print(execution_text)
         self.start_loading(f"Executing {tool_name}")
 
     def on_tool_end(self, output, **kwargs):
