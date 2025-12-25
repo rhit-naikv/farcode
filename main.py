@@ -1,7 +1,9 @@
+import sys
+
 import typer
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from rich.console import Console
 
 from callbacks import LoadingAndApprovalCallbackHandler
@@ -52,42 +54,61 @@ def main():
             # Add user message to history
             messages.append(HumanMessage(content=user_input))
 
-            # Show initial processing message
-            console.print("[green]Processing your request...[/green]")
-
-            # Create a new callback handler for each request to avoid state issues
-            # but pass the shared approved tools to maintain approval across requests
+            # Create a new callback handler for each request
             callback_handler = LoadingAndApprovalCallbackHandler(
                 shared_approved_tools=approved_tools
             )
 
-            # Invoke the agent with the messages and callback handler
-            response = agent.invoke(
-                {"messages": messages},
-                config={"recursion_limit": 15, "callbacks": [callback_handler]},
-            )
+            # Track if we've started printing AI response
+            has_started_printing_response = False
+            full_response = ""
 
-            # Stop any remaining loading indicators from the callback handler
+            # Stream with messages mode for token-by-token streaming
+            # Wrap messages in a dict with "messages" key for the agent state
+            for event in agent.stream(
+                {"messages": messages},
+                config={"callbacks": [callback_handler]},
+                stream_mode="messages",
+            ):
+                # Stop the loading indicator when we start getting actual content
+                # During streaming, we show the response as it arrives rather than using loading indicators
+                if (
+                    callback_handler.live_display
+                    and callback_handler.live_display.is_started
+                ):
+                    callback_handler.stop_loading()
+
+                # event is a tuple of (message, metadata)
+                message, metadata = event
+
+                # Check if this is an AI message chunk with content
+                if isinstance(message, (AIMessageChunk, AIMessage)):
+                    # Handle content being either string or list
+                    content = message.content
+                    if isinstance(content, str) and content:
+                        if not has_started_printing_response:
+                            console.print("\n[blue]Response: [/blue]", end="")
+                            has_started_printing_response = True
+
+                        # Print the content token by token
+                        console.print(content, end="", style="blue")
+                        full_response += content
+
+                        # Force flush to ensure immediate display
+                        sys.stdout.flush()
+
+            # Stop any remaining loading indicators
             callback_handler.stop_loading()
 
-            # Show completion message
+            # Print newline after streaming completes
+            if has_started_printing_response:
+                console.print()
+
             console.print("[green]Processing completed.[/green]")
 
-            # Add the agent's response to the message history
-            response_messages = response.get("messages", [])
-            messages = response_messages
-
-            # Find the last AI message to display
-            ai_response = None
-            for msg in reversed(response_messages):
-                if isinstance(msg, AIMessage) and msg.content:
-                    ai_response = msg.content
-                    break
-
-            if ai_response:
-                console.print(f"Response: {ai_response}", style="blue")
-            else:
-                console.print("\nNo response content generated.", style="yellow")
+            # Update message history with the AI response
+            if full_response:
+                messages.append(AIMessage(content=full_response))
 
         except Exception as e:
             error_msg = str(e)

@@ -23,9 +23,15 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         # We'll use rich's built-in spinner instead of custom threading
         self.spinner = Spinner("aesthetic")
         self.live_display = None
+        self.is_streaming = False  # Track if we're in streaming mode
 
     def start_loading(self, message):
         """Start the loading indicator using Rich's Live display"""
+        # Don't show loading during streaming - when streaming,
+        # we show the response as it arrives rather than using loading indicators
+        if self.is_streaming:
+            return
+
         # Stop any existing live display
         if self.live_display and self.live_display.is_started:
             self.live_display.stop()
@@ -71,8 +77,22 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         # Only handle at tool level
         pass
 
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """Called when LLM starts - indicates streaming is beginning"""
+        # Set streaming flag to prevent loading indicators from appearing
+        # during token-by-token response streaming
+        self.is_streaming = True
+        # Stop any existing loading indicators since we'll show the response as it streams
+        self.stop_loading()
+
+    def on_llm_end(self, response, **kwargs):
+        """Called when LLM finishes - indicates streaming has ended"""
+        # Reset streaming flag to allow loading indicators for subsequent operations
+        self.is_streaming = False
+
     def on_tool_start(self, serialized, input_str, **kwargs):
         """Called when a tool starts"""
+        self.is_streaming = False  # Tools aren't streaming
         self.stop_loading()
 
         # Extract tool name from serialized
@@ -126,4 +146,4 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         """Called when a tool finishes"""
         self.stop_loading()
         console.print("[green]Tool execution completed.[/green]")
-        self.start_loading("Processing")
+        # Don't start loading again - the LLM will resume streaming its response naturally
