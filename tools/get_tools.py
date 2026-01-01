@@ -1,4 +1,6 @@
 # Import community file tools
+from typing import List
+
 from langchain_community.tools import (
     CopyFileTool,
     DeleteFileTool,
@@ -9,11 +11,18 @@ from langchain_community.tools import (
     ReadFileTool,
     WriteFileTool,
 )
+from langchain_core.tools import BaseTool
 
 from .secure_shell_tool import create_secure_shell_tool
 
 
-def getTools():
+def get_tools() -> List[BaseTool]:
+    """
+    Initialize and return a list of available tools for the AI agent.
+
+    Returns:
+        List of initialized tool instances
+    """
     # Initialize the community file tools
     list_directory_tool = ListDirectoryTool()
     read_file_tool = ReadFileTool()

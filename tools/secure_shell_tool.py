@@ -9,6 +9,9 @@ from langchain_core.callbacks import CallbackManagerForToolRun
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+# Maximum output length to prevent information disclosure
+MAX_OUTPUT_LENGTH = 10000
+
 
 class SecureShellTool(BaseTool):
     """
@@ -134,6 +137,13 @@ class SecureShellTool(BaseTool):
     ) -> str:
         """
         Execute a shell command with security checks.
+
+        Args:
+            command: The shell command to execute
+            run_manager: Optional callback manager for tool runs
+
+        Returns:
+            str: The output of the command or an error message
         """
         try:
             # Parse the command to extract the main command
@@ -149,11 +159,18 @@ class SecureShellTool(BaseTool):
 
             # Check if command is allowed
             if main_cmd not in self.allowed_commands:
-                return f"Error: Command '{main_cmd}' is not in the allowed list. Allowed commands: {', '.join(self.allowed_commands)}"
+                return (
+                    f"Error: Command '{main_cmd}' is not in the allowed list. "
+                    f"Allowed commands: {', '.join(self.allowed_commands)}"
+                )
 
-            # Validate file paths in the command to ensure they are within allowed paths
+            # Validate file paths in the command to ensure they are within
+            # allowed paths
             if not self._validate_file_paths(parsed_command[1:]):
-                return f"Error: Command references paths outside of allowed directories. Allowed paths: {', '.join(self.allowed_paths)}"
+                return (
+                    f"Error: Command references paths outside of allowed directories. "
+                    f"Allowed paths: {', '.join(self.allowed_paths)}"
+                )
 
             # Execute the command with a timeout
             start_time = time()
@@ -176,13 +193,15 @@ class SecureShellTool(BaseTool):
             if result.returncode == 0:
                 output = result.stdout
             else:
-                output = f"Command failed with return code {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+                output = (
+                    f"Command failed with return code {result.returncode}\n"
+                    f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+                )
 
             # Limit output length to prevent information disclosure
-            max_output_length = 10000
-            if len(output) > max_output_length:
+            if len(output) > MAX_OUTPUT_LENGTH:
                 output = (
-                    output[:max_output_length] + "\n... [output truncated for security]"
+                    f"{output[:MAX_OUTPUT_LENGTH]}\n... [output truncated for security]"
                 )
 
             return output
@@ -195,7 +214,12 @@ class SecureShellTool(BaseTool):
     def _validate_file_paths(self, args: List[str]) -> bool:
         """
         Check if any of the command arguments reference paths outside of allowed paths.
-        This is a basic check and not foolproof, but provides a basic level of protection.
+
+        Args:
+            args: List of command arguments to validate
+
+        Returns:
+            bool: True if all paths are within allowed paths, False otherwise
         """
         for arg in args:
             # Skip if argument doesn't look like a path
@@ -229,5 +253,11 @@ class SecureShellTool(BaseTool):
 def create_secure_shell_tool(**kwargs) -> SecureShellTool:
     """
     Factory function to create a SecureShellTool with default security settings.
+
+    Args:
+        **kwargs: Additional arguments to pass to SecureShellTool constructor
+
+    Returns:
+        SecureShellTool: A configured instance of SecureShellTool
     """
     return SecureShellTool(**kwargs)

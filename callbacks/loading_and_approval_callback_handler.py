@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 import typer
 from langchain_core.callbacks import BaseCallbackHandler
@@ -10,11 +11,14 @@ from rich.text import Text
 
 console = Console()
 
+# Spinner refresh rate in refreshes per second
+SPINNER_REFRESH_RATE: int = 10  # Refreshes per second for spinner
+
 
 class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
     """Custom callback handler to show loading indicators and approve tool calls"""
 
-    def __init__(self, shared_approved_tools=None):
+    def __init__(self, shared_approved_tools: Optional[set] = None):
         # Use the shared approved tools set, or create a new one if not provided
         # Use 'is None' check instead of truthy check to properly handle empty set
         self.shared_approved_tools = (
@@ -54,7 +58,7 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         # Create a new Live display with the spinner content
         spinner_renderable = SpinnerRenderable(self.spinner, message)
         self.live_display = Live(
-            spinner_renderable, refresh_per_second=10, transient=True
+            spinner_renderable, refresh_per_second=SPINNER_REFRESH_RATE, transient=True
         )
         self.live_display.start()
 
@@ -134,24 +138,17 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
                 # Approve for all future calls in this session
                 self.shared_approved_tools.add(tool_name)
                 # Use Rich's Text class to safely handle dynamic content with styles
-                approval_text = Text()
-                approval_text.append("Approved '", style="green")
-                approval_text.append(
-                    tool_name, style=""
-                )  # Don't apply any style to dynamic content
-                approval_text.append(
-                    "' for all future calls in this session.", style="green"
+                console.print(
+                    Text(
+                        f"Approved '{tool_name}' for all future calls in this session.",
+                        style="green",
+                    )
                 )
-                console.print(approval_text)
             elif approval != "y":
                 # Use Rich's Text class to safely handle dynamic content with styles
-                denial_text = Text()
-                denial_text.append("Denied '", style="red")
-                denial_text.append(
-                    tool_name, style=""
-                )  # Don't apply any style to dynamic content
-                denial_text.append("'. Skipping this tool call.", style="red")
-                console.print(denial_text)
+                console.print(
+                    Text(f"Denied '{tool_name}'. Skipping this tool call.", style="red")
+                )
                 # Instead of raising an exception, we'll return early to avoid the tool execution
                 # Unfortunately, this approach doesn't work with LangChain's callback system
                 # The only way to stop execution is to raise an exception
@@ -160,26 +157,19 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
                 )
         else:
             # Use Rich's Text class to safely handle dynamic content with styles
-            approved_text = Text()
-            approved_text.append("Using previously approved tool: ", style="green")
-            approved_text.append(
-                tool_name, style=""
-            )  # Don't apply any style to dynamic content
-            console.print(approved_text)
+            console.print(
+                Text(f"Using previously approved tool: {tool_name}", style="green")
+            )
 
         # Show loading status for tool execution
         # Use Rich's Text class to safely handle dynamic content with styles
-        execution_text = Text()
-        execution_text.append("Executing ", style="green")
-        execution_text.append(
-            tool_name, style=""
-        )  # Don't apply any style to dynamic content
-        execution_text.append("...", style="green")
-        console.print(execution_text)
+        console.print(Text(f"Executing {tool_name}...", style="green"))
         self.start_loading(f"Executing {tool_name}")
 
     def on_tool_end(self, output, **kwargs):
         """Called when a tool finishes"""
         self.stop_loading()
-        console.print("[green]Tool execution completed.[/green]")
+        # Use Rich's Text class to safely handle static content with styles
+        completed_text = Text("Tool execution completed.", style="green")
+        console.print(completed_text)
         # Don't start loading again - the LLM will resume streaming its response naturally

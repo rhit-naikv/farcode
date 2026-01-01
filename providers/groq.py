@@ -1,15 +1,19 @@
 import os
 from typing import Optional
 
+from langchain_core.language_models import BaseChatModel
 from langchain_groq import ChatGroq
 
 
-def get_groq_llm(model: Optional[str] = None):
+def get_groq_llm(model: Optional[str] = None) -> BaseChatModel:
     """
     Get Groq LLM instance.
 
     Args:
         model: Optional model name (defaults to openai/gpt-oss-120b)
+
+    Returns:
+        Configured ChatGroq instance
     """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:

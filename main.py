@@ -9,9 +9,13 @@ from rich.text import Text
 
 from callbacks import LoadingAndApprovalCallbackHandler
 from commands import CommandHandler, get_model_for_provider
-from config import AgentState
+from config import PROVIDERS, AgentState
 from providers.get_provider import get_llm_provider
-from tools import getTools
+from tools import get_tools
+
+# HTTP error codes
+HTTP_BAD_REQUEST: int = 400
+HTTP_TOO_MANY_REQUESTS: int = 429
 
 load_dotenv()
 
@@ -22,11 +26,17 @@ console = Console()
 llm = get_llm_provider("open_router")
 
 # Create the full list of tools
-tools = getTools()
+tools = get_tools()
 
 # Define the system message for the agent
-system_message = """You are an expert Senior AI Software Engineer. You must use the available tools to complete complex coding tasks, write files, read documentation, and search the web. You have access to read files, write files, list directories, and search the web. Use these tools as needed to help the user with their software engineering tasks. All file operations are restricted to the current working directory and its subdirectories.
-IMPORTANT: When calling tools, you must return valid JSON responses in the proper OpenAI function calling format."""
+system_message = """You are an expert Senior AI Software Engineer. You must use the
+available tools to complete complex coding tasks, write files, read documentation,
+and search the web. You have access to read files, write files, list directories,
+and search the web. Use these tools as needed to help the user with their software
+engineering tasks. All file operations are restricted to the current working
+directory and its subdirectories.
+IMPORTANT: When calling tools, you must return valid JSON responses in the proper
+OpenAI function calling format."""
 
 # Create the agent using the new LangChain approach
 agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
@@ -35,27 +45,26 @@ agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
 command_handler = CommandHandler(console)
 
 
+def is_waiting_for_selection(handler) -> bool:
+    """Check if command handler is waiting for provider or model selection."""
+    return handler.waiting_for_provider_selection or handler.waiting_for_model_selection
+
+
 @app.command()
-def main():
+def main() -> None:
     """Interactive CLI for the Senior AI Software Engineer agent."""
     # Use Rich's Text class to safely handle static content with styles
-    welcome_text = Text()
-    welcome_text.append(
-        "Welcome to the Senior AI Software Engineer Agent!", style="bold green"
+    console.print(
+        Text("Welcome to the Senior AI Software Engineer Agent!", style="bold green")
     )
-    console.print(welcome_text)
 
     # Use Rich's Text class to safely handle static content with styles
-    exit_text = Text()
-    exit_text.append(
-        "Type 'exit' or 'quit' to stop the conversation.\n", style="yellow"
+    console.print(
+        Text("Type 'exit' or 'quit' to stop the conversation.\n", style="yellow")
     )
-    console.print(exit_text)
 
     # Show help hint
-    help_text = Text()
-    help_text.append("Type '/help' to see available commands.\n", style="cyan")
-    console.print(help_text)
+    console.print(Text("Type '/help' to see available commands.\n", style="cyan"))
 
     # Initialize message history
     messages = []
@@ -93,13 +102,7 @@ def main():
             continue
 
         # Check if we're in the middle of a multi-step command
-        if (
-            hasattr(command_handler, "waiting_for_provider_selection")
-            and command_handler.waiting_for_provider_selection
-        ) or (
-            hasattr(command_handler, "waiting_for_model_selection")
-            and command_handler.waiting_for_model_selection
-        ):
+        if is_waiting_for_selection(command_handler):
             # Process the input as part of the ongoing command
             command_executed, updated_state, should_exit = command_handler.execute(
                 user_input, shared_state.__dict__
@@ -131,11 +134,10 @@ def main():
                         # Reset the flag
                         shared_state.model_changed = False
 
-                        from config import PROVIDERS  # Import PROVIDERS to access it
-
                         console.print(
                             Text(
-                                f"\n✓ Agent successfully updated with {PROVIDERS[provider]['name']}/{model}",
+                                f"\n✓ Agent successfully updated with "
+                                f"{PROVIDERS[provider]['name']}/{model}",
                                 style="bold green",
                             )
                         )
@@ -184,11 +186,10 @@ def main():
                         # Reset the flag
                         shared_state.model_changed = False
 
-                        from config import PROVIDERS  # Import PROVIDERS to access it
-
                         console.print(
                             Text(
-                                f"\n✓ Agent successfully updated with {PROVIDERS[provider]['name']}/{model}",
+                                f"\n✓ Agent successfully updated with "
+                                f"{PROVIDERS[provider]['name']}/{model}",
                                 style="bold green",
                             )
                         )
@@ -250,14 +251,16 @@ def main():
                     content = message.content
                     if isinstance(content, str) and content:
                         if not has_started_printing_response:
-                            # Use Rich's Text class to safely handle static content with styles
+                            # Use Rich's Text class to safely handle static content
+                            # with styles
                             response_header = Text()
                             response_header.append("\nResponse: ", style="blue")
                             console.print(response_header, end="")
                             has_started_printing_response = True
 
                         # Print the content token by token
-                        # Disable markup parsing to prevent errors from AI-generated Rich markup
+                        # Disable markup parsing to prevent errors from
+                        # AI-generated Rich markup
                         console.print(content, end="", style="blue", markup=False)
                         full_response += content
 
@@ -282,44 +285,36 @@ def main():
 
         except Exception as e:
             error_msg = str(e)
-            # Disable markup parsing to prevent errors from AI-generated Rich markup in error messages
+            # Disable markup parsing to prevent errors from AI-generated Rich
+            # markup in error messages
             # Use Rich's Text class to safely handle static content with styles
-            error_text = Text()
-            error_text.append(f"\nError: {error_msg}", style="red")
-            console.print(error_text)
+            console.print(Text(f"\nError: {error_msg}", style="red"))
 
             # Provide helpful error messages
             if "tool_use_failed" in error_msg:
                 # Use Rich's Text class to safely handle static content with styles
-                error_help_text = Text()
-                error_help_text.append(
-                    "\nℹ️  Tool calling error detected...", style="yellow"
+                console.print(
+                    Text("\nℹ️  Tool calling error detected...", style="yellow")
                 )
-                console.print(error_help_text)
-            elif "400" in error_msg:
+            elif str(HTTP_BAD_REQUEST) in error_msg:
                 # Use Rich's Text class to safely handle static content with styles
-                error_help_text = Text()
-                error_help_text.append("\nℹ️  API error...", style="yellow")
-                console.print(error_help_text)
-            elif "429" in error_msg or "Too Many Requests" in error_msg:
+                console.print(Text("\nℹ️  API error...", style="yellow"))
+            elif (
+                str(HTTP_TOO_MANY_REQUESTS) in error_msg
+                or "Too Many Requests" in error_msg
+            ):
                 # Use Rich's Text class to safely handle static content with styles
-                error_help_text = Text()
-                error_help_text.append("\nℹ️ throttling error...", style="yellow")
-                console.print(error_help_text)
+                console.print(Text("\nℹ️ throttling error...", style="yellow"))
             elif "was denied by user" in error_msg:
                 # Use Rich's Text class to safely handle static content with styles
-                error_help_text = Text()
-                error_help_text.append(
-                    "\n⚠️  Tool call was denied by user.", style="yellow"
+                console.print(
+                    Text("\n⚠️  Tool call was denied by user.", style="yellow")
                 )
-                console.print(error_help_text)
             elif "Stopping execution" in error_msg:
                 # Use Rich's Text class to safely handle static content with styles
-                error_help_text = Text()
-                error_help_text.append(
-                    "\n⚠️  Tool call was denied by user.", style="yellow"
+                console.print(
+                    Text("\n⚠️  Tool call was denied by user.", style="yellow")
                 )
-                console.print(error_help_text)
 
             # Remove the last user message on error
             if messages and isinstance(messages[-1], HumanMessage):

@@ -1,4 +1,4 @@
-from .get_tools import getTools
+from .get_tools import get_tools
 
-# Make getTools available when importing from tools
-__all__ = ["getTools"]
+# Make get_tools available when importing from tools
+__all__ = ["get_tools"]

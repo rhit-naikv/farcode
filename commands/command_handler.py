@@ -2,6 +2,7 @@
 
 from typing import List, Optional, Tuple
 
+from langchain_core.language_models import BaseChatModel
 from rich.console import Console
 from rich.text import Text
 
@@ -301,19 +302,36 @@ class CommandHandler:
         return (state, True)
 
     def _print_error(self, message: str) -> None:
-        """Print an error message."""
+        """
+        Print an error message with red styling.
+
+        Args:
+            message: The error message to display
+        """
         text = Text(f"\n✗ {message}", style="bold red")
         self.console.print(text)
 
     def _print_info(self, message: str) -> None:
-        """Print an info message."""
+        """
+        Print an info message with yellow styling.
+
+        Args:
+            message: The info message to display
+        """
         text = Text(f"ℹ {message}", style="yellow")
         self.console.print(text)
 
 
-def get_model_for_provider(provider: str, model: str):
+def get_model_for_provider(provider: str, model: str) -> BaseChatModel:
     """
     Get a configured LLM instance for the given provider and model.
+
+    Args:
+        provider: Name of the provider (e.g., 'google', 'groq', 'open_router')
+        model: Name of the model to use
+
+    Returns:
+        Configured LLM instance for the specified provider and model
 
     Uses the dynamic provider system with model override.
     """
