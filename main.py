@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.text import Text
 
 from callbacks import LoadingAndApprovalCallbackHandler
+from commands import CommandHandler, get_model_for_provider
+from config import AgentState
 from providers.get_provider import get_llm_provider
 from tools import getTools
 
@@ -29,6 +31,9 @@ IMPORTANT: When calling tools, you must return valid JSON responses in the prope
 # Create the agent using the new LangChain approach
 agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
 
+# Initialize command handler
+command_handler = CommandHandler(console)
+
 
 @app.command()
 def main():
@@ -47,20 +52,164 @@ def main():
     )
     console.print(exit_text)
 
+    # Show help hint
+    help_text = Text()
+    help_text.append("Type '/help' to see available commands.\n", style="cyan")
+    console.print(help_text)
+
     # Initialize message history
     messages = []
 
     # Initialize approved tools set to be shared across requests in this session
     approved_tools = set()
 
-    while True:
-        user_input = typer.prompt("Enter your query")
+    # Initialize shared state for commands
+    shared_state = AgentState(
+        messages=messages,
+        approved_tools=approved_tools,
+        current_provider="open_router",
+        current_model="xiaomi/mimo-v2-flash:free",
+        agent=agent,
+        model_changed=False,
+    )
 
+    while True:
+        # Check if we're in the middle of a multi-step command
+        if (
+            hasattr(command_handler, "waiting_for_provider_selection")
+            and command_handler.waiting_for_provider_selection
+        ):
+            user_input = typer.prompt("Enter provider number")
+        elif (
+            hasattr(command_handler, "waiting_for_model_selection")
+            and command_handler.waiting_for_model_selection
+        ):
+            user_input = typer.prompt("Enter model number")
+        else:
+            user_input = typer.prompt("Enter your query")
+
+        # Check for empty input
+        if not user_input.strip():
+            continue
+
+        # Check if we're in the middle of a multi-step command
+        if (
+            hasattr(command_handler, "waiting_for_provider_selection")
+            and command_handler.waiting_for_provider_selection
+        ) or (
+            hasattr(command_handler, "waiting_for_model_selection")
+            and command_handler.waiting_for_model_selection
+        ):
+            # Process the input as part of the ongoing command
+            command_executed, updated_state, should_exit = command_handler.execute(
+                user_input, shared_state.__dict__
+            )
+
+            if command_executed:
+                # Update shared state
+                for key, value in updated_state.items():
+                    if hasattr(shared_state, key):
+                        setattr(shared_state, key, value)
+
+                # Check if we should exit
+                if should_exit:
+                    break
+
+                # Check if model was changed and agent needs to be recreated
+                if shared_state.model_changed:
+                    try:
+                        # Get the new LLM
+                        provider = shared_state.current_provider
+                        model = shared_state.current_model
+                        new_llm = get_model_for_provider(provider, model)
+
+                        # Recreate the agent with the new LLM
+                        shared_state.agent = create_agent(
+                            model=new_llm, tools=tools, system_prompt=system_message
+                        )
+
+                        # Reset the flag
+                        shared_state.model_changed = False
+
+                        from config import PROVIDERS  # Import PROVIDERS to access it
+
+                        console.print(
+                            Text(
+                                f"\n✓ Agent successfully updated with {PROVIDERS[provider]['name']}/{model}",
+                                style="bold green",
+                            )
+                        )
+
+                    except Exception as e:
+                        console.print(
+                            Text(
+                                f"\n✗ Failed to update agent: {str(e)}",
+                                style="bold red",
+                            )
+                        )
+                        console.print(
+                            Text("Keeping the previous configuration.", style="yellow")
+                        )
+
+            continue
+        # Check if it's a command (including exit/quit commands)
+        elif command_handler.is_command(user_input):
+            command_executed, updated_state, should_exit = command_handler.execute(
+                user_input, shared_state.__dict__
+            )
+
+            if command_executed:
+                # Update shared state
+                for key, value in updated_state.items():
+                    if hasattr(shared_state, key):
+                        setattr(shared_state, key, value)
+
+                # Check if we should exit
+                if should_exit:
+                    break
+
+                # Check if model was changed and agent needs to be recreated
+                if shared_state.model_changed:
+                    try:
+                        # Get the new LLM
+                        provider = shared_state.current_provider
+                        model = shared_state.current_model
+                        new_llm = get_model_for_provider(provider, model)
+
+                        # Recreate the agent with the new LLM
+                        shared_state.agent = create_agent(
+                            model=new_llm, tools=tools, system_prompt=system_message
+                        )
+
+                        # Reset the flag
+                        shared_state.model_changed = False
+
+                        from config import PROVIDERS  # Import PROVIDERS to access it
+
+                        console.print(
+                            Text(
+                                f"\n✓ Agent successfully updated with {PROVIDERS[provider]['name']}/{model}",
+                                style="bold green",
+                            )
+                        )
+
+                    except Exception as e:
+                        console.print(
+                            Text(
+                                f"\n✗ Failed to update agent: {str(e)}",
+                                style="bold red",
+                            )
+                        )
+                        console.print(
+                            Text("Keeping the previous configuration.", style="yellow")
+                        )
+
+            continue
+
+        # Handle regular prompts (non-commands)
+        # Check for exit/quit without slash
         if user_input.lower() in ["exit", "quit"]:
-            # Use Rich's Text class to safely handle static content with styles
-            goodbye_text = Text()
-            goodbye_text.append("Goodbye!", style="bold green")
-            console.print(goodbye_text)
+            console.print(Text("\nGoodbye!", style="bold green"))
             break
 
         try:
@@ -76,15 +225,16 @@ def main():
             has_started_printing_response = False
             full_response = ""
 
+            # Get current agent from shared state
+            current_agent = shared_state.agent
+
             # Stream with messages mode for token-by-token streaming
-            # Wrap messages in a dict with "messages" key for the agent state
-            for event in agent.stream(
+            for event in current_agent.stream(
                 {"messages": messages},
                 config={"callbacks": [callback_handler]},
                 stream_mode="messages",
             ):
                 # Stop the loading indicator when we start getting actual content
-                # During streaming, we show the response as it arrives rather than using loading indicators
                 if (
                     callback_handler.live_display
                     and callback_handler.live_display.is_started
