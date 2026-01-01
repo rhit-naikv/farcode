@@ -222,6 +222,9 @@ def main() -> None:
                 shared_approved_tools=approved_tools
             )
 
+            # Start loading indicator since we're about to start processing
+            callback_handler.start_loading("Processing your request...")
+
             # Track if we've started printing AI response
             has_started_printing_response = False
             full_response = ""
@@ -235,13 +238,6 @@ def main() -> None:
                 config={"callbacks": [callback_handler]},
                 stream_mode="messages",
             ):
-                # Stop the loading indicator when we start getting actual content
-                if (
-                    callback_handler.live_display
-                    and callback_handler.live_display.is_started
-                ):
-                    callback_handler.stop_loading()
-
                 # event is a tuple of (message, metadata)
                 message, metadata = event
 
@@ -251,6 +247,14 @@ def main() -> None:
                     content = message.content
                     if isinstance(content, str) and content:
                         if not has_started_printing_response:
+                            # Stop the loading indicator when we start getting actual content
+                            # This should only happen once, when we first start printing
+                            if (
+                                callback_handler.live_display
+                                and callback_handler.live_display.is_started
+                            ):
+                                callback_handler.stop_loading()
+
                             # Use Rich's Text class to safely handle static content
                             # with styles
                             response_header = Text()

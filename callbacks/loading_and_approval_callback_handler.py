@@ -82,15 +82,15 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         pass
 
     def on_llm_start(self, serialized, prompts, **kwargs):
-        """Called when LLM starts - indicates streaming is beginning"""
-        # Set streaming flag to prevent loading indicators from appearing
-        # during token-by-token response streaming
-        self.is_streaming = True
-        # Stop any existing loading indicators since we'll show the response as it streams
-        self.stop_loading()
+        """Called when LLM starts - indicates processing is beginning"""
+        # Don't set streaming flag immediately - only set it when we start receiving tokens
+        # This allows the spinner to show during initial processing time
+        pass
 
     def on_llm_end(self, response, **kwargs):
         """Called when LLM finishes - indicates streaming has ended"""
+        # Stop any remaining loading indicators
+        self.stop_loading()
         # Reset streaming flag to allow loading indicators for subsequent operations
         self.is_streaming = False
 
