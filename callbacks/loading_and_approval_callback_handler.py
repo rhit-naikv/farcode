@@ -117,6 +117,8 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
             tool_args, style=""
         )  # Don't apply any style to dynamic content
 
+        # Print a newline before the panel to ensure it starts on a new line
+        console.print()  # Add a blank line to separate from previous output
         console.print(
             Panel(
                 panel_content,
@@ -164,6 +166,7 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         # Show loading status for tool execution
         # Use Rich's Text class to safely handle dynamic content with styles
         console.print(Text(f"Executing {tool_name}...", style="green"))
+        console.print()  # Add a blank line to separate from the loading indicator
         self.start_loading(f"Executing {tool_name}")
 
     def on_tool_end(self, output, **kwargs):
@@ -172,4 +175,5 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         # Use Rich's Text class to safely handle static content with styles
         completed_text = Text("Tool execution completed.", style="green")
         console.print(completed_text)
+        console.print()  # Add a blank line to separate from the tool completion message
         # Don't start loading again - the LLM will resume streaming its response naturally

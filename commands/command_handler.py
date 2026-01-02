@@ -152,9 +152,6 @@ class CommandHandler:
         self.console.print(
             "  [green]/exit[/green] or [green]/quit[/green] - Exit the agent"
         )
-        self.console.print(
-            "\n[italic]Use /model <provider> <model_name> to switch between providers and models[/italic]"
-        )
 
     def change_model(self, args: List[str], state: dict) -> Optional[dict]:
         """Change the AI model and provider. Usage: /model <provider> <model_name> or /model to see options."""

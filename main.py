@@ -10,6 +10,7 @@ from rich.text import Text
 from callbacks import LoadingAndApprovalCallbackHandler
 from commands import CommandHandler, get_model_for_provider
 from config import PROVIDERS, AgentState
+from prompts import load_system_prompt
 from providers.get_provider import get_llm_provider
 from tools import get_tools
 
@@ -29,17 +30,10 @@ llm = get_llm_provider("open_router")
 tools = get_tools()
 
 # Define the system message for the agent
-system_message = """You are an expert Senior AI Software Engineer. You must use the
-available tools to complete complex coding tasks, write files, read documentation,
-and search the web. You have access to read files, write files, list directories,
-and search the web. Use these tools as needed to help the user with their software
-engineering tasks. All file operations are restricted to the current working
-directory and its subdirectories.
-IMPORTANT: When calling tools, you must return valid JSON responses in the proper
-OpenAI function calling format."""
+system_prompt = load_system_prompt()
 
 # Create the agent using the new LangChain approach
-agent = create_agent(model=llm, tools=tools, system_prompt=system_message)
+agent = create_agent(model=llm, tools=tools, system_prompt=system_prompt)
 
 # Initialize command handler
 command_handler = CommandHandler(console)
@@ -128,7 +122,7 @@ def main() -> None:
 
                         # Recreate the agent with the new LLM
                         shared_state.agent = create_agent(
-                            model=new_llm, tools=tools, system_prompt=system_message
+                            model=new_llm, tools=tools, system_prompt=system_prompt
                         )
 
                         # Reset the flag
@@ -180,7 +174,7 @@ def main() -> None:
 
                         # Recreate the agent with the new LLM
                         shared_state.agent = create_agent(
-                            model=new_llm, tools=tools, system_prompt=system_message
+                            model=new_llm, tools=tools, system_prompt=system_prompt
                         )
 
                         # Reset the flag
