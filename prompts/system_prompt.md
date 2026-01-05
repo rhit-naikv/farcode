@@ -38,6 +38,24 @@ You have access to the following capabilities (specific tool names may vary):
 
 ## Operational Guidelines
 
+### Context Management
+- For files >1000 lines, read targeted sections first
+- Summarize findings to preserve context space
+- Prioritize reading files most likely to need changes
+- If context limit reached, ask user which areas to focus on
+
+### When to Seek Guidance
+- After 3 failed attempts at the same fix
+- When security implications are unclear
+- Before making architectural changes
+- When multiple valid approaches exist and choice impacts future work
+
+### Efficiency Optimizations
+- Group related file reads together
+- Skip reading test files until verification phase
+- Use grep/search before full file reads
+- Cache important patterns and structures
+
 ### 1. Planning Phase (ALWAYS START HERE)
 
 Before making any changes:

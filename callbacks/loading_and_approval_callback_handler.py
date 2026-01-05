@@ -1,6 +1,5 @@
 import threading
 import time
-import uuid
 from typing import Optional
 
 import typer

@@ -13,10 +13,12 @@ from langchain_community.tools import (
 )
 from langchain_core.tools import BaseTool
 
+from tools.mcp import get_mcp_tools
+
 from .secure_shell_tool import create_secure_shell_tool
 
 
-def get_tools() -> List[BaseTool]:
+async def get_tools() -> List[BaseTool]:
     """
     Initialize and return a list of available tools for the AI agent.
 
@@ -35,6 +37,9 @@ def get_tools() -> List[BaseTool]:
     # Using secure shell tool with safeguards instead of the default ShellTool
     shell_tool = create_secure_shell_tool()
 
+    # get mcp_tools
+    mcp_tools = await get_mcp_tools()
+
     return [
         list_directory_tool,
         read_file_tool,
@@ -45,4 +50,5 @@ def get_tools() -> List[BaseTool]:
         file_search_tool,
         shell_tool,
         search_tool,
+        *mcp_tools,
     ]

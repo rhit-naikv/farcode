@@ -4,6 +4,7 @@ langchain-google-genai
 langchain-openai
 langchain-community
 langchain-experimental
+langchain-mcp-adapters
 langgraph
 langgraph-checkpoint
 duckduckgo-search

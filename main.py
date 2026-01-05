@@ -1,4 +1,6 @@
+import asyncio
 import sys
+from typing import Optional
 
 import typer
 from dotenv import load_dotenv
@@ -8,7 +10,7 @@ from rich.console import Console
 from rich.text import Text
 
 from callbacks import LoadingAndApprovalCallbackHandler
-from commands import CommandHandler, get_model_for_provider
+from commands import CommandHandler
 from config import PROVIDERS, AgentState
 from prompts import load_system_prompt
 from providers.get_provider import get_llm_provider
@@ -23,17 +25,19 @@ load_dotenv()
 app = typer.Typer()
 console = Console()
 
-# Initialize the LLM
-llm = get_llm_provider("open_router")
 
-# Create the full list of tools
-tools = get_tools()
+async def initialize_agent(provider: str = "open_router", model: Optional[str] = None):
+    # Initialize the LLM
+    llm = get_llm_provider(provider, model)
 
-# Define the system message for the agent
-system_prompt = load_system_prompt()
+    # Create the full list of tools
+    tools = await get_tools()
 
-# Create the agent using the new LangChain approach
-agent = create_agent(model=llm, tools=tools, system_prompt=system_prompt)
+    # Define the system message for the agent
+    system_prompt = load_system_prompt()
+
+    return create_agent(model=llm, tools=tools, system_prompt=system_prompt)
+
 
 # Initialize command handler
 command_handler = CommandHandler(console)
@@ -46,6 +50,10 @@ def is_waiting_for_selection(handler) -> bool:
 
 @app.command()
 def main() -> None:
+    asyncio.run(async_main())
+
+
+async def async_main() -> None:
     """Interactive CLI for the Senior AI Software Engineer agent."""
     # Use Rich's Text class to safely handle static content with styles
     console.print(
@@ -65,6 +73,9 @@ def main() -> None:
 
     # Initialize approved tools set to be shared across requests in this session
     approved_tools = set()
+
+    # Initialize the agent
+    agent = await initialize_agent()
 
     # Initialize shared state for commands
     shared_state = AgentState(
@@ -108,12 +119,7 @@ def main() -> None:
                         # Get the new LLM
                         provider = shared_state.current_provider
                         model = shared_state.current_model
-                        new_llm = get_model_for_provider(provider, model)
-
-                        # Recreate the agent with the new LLM
-                        shared_state.agent = create_agent(
-                            model=new_llm, tools=tools, system_prompt=system_prompt
-                        )
+                        shared_state.agent = await initialize_agent(provider, model)
 
                         # Reset the flag
                         shared_state.model_changed = False
@@ -160,12 +166,7 @@ def main() -> None:
                         # Get the new LLM
                         provider = shared_state.current_provider
                         model = shared_state.current_model
-                        new_llm = get_model_for_provider(provider, model)
-
-                        # Recreate the agent with the new LLM
-                        shared_state.agent = create_agent(
-                            model=new_llm, tools=tools, system_prompt=system_prompt
-                        )
+                        shared_state.agent = await initialize_agent(provider, model)
 
                         # Reset the flag
                         shared_state.model_changed = False
@@ -217,7 +218,7 @@ def main() -> None:
             current_agent = shared_state.agent
 
             # Stream with messages mode for token-by-token streaming
-            for event in current_agent.stream(
+            async for event in current_agent.astream(
                 {"messages": messages},
                 config={"callbacks": [callback_handler]},
                 stream_mode="messages",
