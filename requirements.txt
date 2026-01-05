@@ -4,6 +4,8 @@ langchain-google-genai
 langchain-openai
 langchain-community
 langchain-experimental
+langgraph
+langgraph-checkpoint
 duckduckgo-search
 ddgs
 typer

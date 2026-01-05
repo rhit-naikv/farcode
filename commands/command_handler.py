@@ -247,6 +247,15 @@ class CommandHandler:
             "[italic]Examples: /model google gemini-2.0-flash or /model 1 gemini-2.0-flash[/italic]"
         )
 
+    def get_prompt(self) -> str:
+        """Get the appropriate prompt based on current command state."""
+        if self.waiting_for_provider_selection:
+            return "Enter provider number"
+        elif self.waiting_for_model_selection:
+            return "Enter model number"
+        else:
+            return "Enter your query"
+
     def list_providers(self, args: List[str], state: dict) -> None:
         """List all available providers and their models."""
         self.console.print("\n[bold cyan]Available Providers and Models:[/bold cyan]\n")

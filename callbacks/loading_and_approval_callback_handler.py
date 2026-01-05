@@ -1,4 +1,6 @@
+import threading
 import time
+import uuid
 from typing import Optional
 
 import typer
@@ -16,7 +18,7 @@ SPINNER_REFRESH_RATE: int = 10  # Refreshes per second for spinner
 
 
 class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
-    """Custom callback handler to show loading indicators and approve tool calls"""
+    """Custom callback handler to show loading indicators and approve tool calls with sequential processing"""
 
     def __init__(self, shared_approved_tools: Optional[set] = None):
         # Use the shared approved tools set, or create a new one if not provided
@@ -28,6 +30,9 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         self.spinner = Spinner("aesthetic")
         self.live_display = None
         self.is_streaming = False  # Track if we're in streaming mode
+
+        # Add a lock to ensure only one tool approval is processed at a time
+        self.approval_lock = threading.Lock()
 
     def start_loading(self, message):
         """Start the loading indicator using Rich's Live display"""
@@ -95,7 +100,7 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         self.is_streaming = False
 
     def on_tool_start(self, serialized, input_str, **kwargs):
-        """Called when a tool starts"""
+        """Called when a tool starts - with sequential approval processing"""
         self.is_streaming = False  # Tools aren't streaming
         self.stop_loading()
 
@@ -107,73 +112,73 @@ class LoadingAndApprovalCallbackHandler(BaseCallbackHandler):
         )
         tool_args = input_str if isinstance(input_str, str) else str(input_str)
 
-        # Show tool call details and ask for approval
-        # Use Rich's Text class to safely handle dynamic content with styles
-        panel_content = Text()
-        panel_content.append("Tool Call: ", style="bold yellow")
-        panel_content.append(tool_name, style="")
-        panel_content.append("\nArguments: ", style="bold cyan")
-        panel_content.append(
-            tool_args, style=""
-        )  # Don't apply any style to dynamic content
-
-        # Print a newline before the panel to ensure it starts on a new line
-        console.print()  # Add a blank line to separate from previous output
-        console.print(
-            Panel(
-                panel_content,
-                border_style="yellow",
-            )
-        )
-
-        # Ask user for approval if not already approved in this session
-        # Escape content to prevent Rich markup issues in typer prompt
-        escaped_tool_name = tool_name.replace("[", "\\[").replace("]", "\\]")
-        if tool_name not in self.shared_approved_tools:
-            approval = typer.prompt(
-                f"Do you want to allow '{escaped_tool_name}'? (y/Y to approve, n/N to deny, a/A to approve for all future calls)",
-                type=str,
-                default="y",
-            ).lower()
-
-            if approval == "a":
-                # Approve for all future calls in this session
-                self.shared_approved_tools.add(tool_name)
-                # Use Rich's Text class to safely handle dynamic content with styles
-                console.print(
-                    Text(
-                        f"Approved '{tool_name}' for all future calls in this session.",
-                        style="green",
-                    )
-                )
-            elif approval != "y":
-                # Use Rich's Text class to safely handle dynamic content with styles
-                console.print(
-                    Text(f"Denied '{tool_name}'. Skipping this tool call.", style="red")
-                )
-                # Instead of raising an exception, we'll return early to avoid the tool execution
-                # Unfortunately, this approach doesn't work with LangChain's callback system
-                # The only way to stop execution is to raise an exception
-                raise RuntimeError(
-                    f"Tool '{tool_name}' was denied by user. Stopping execution."
-                )
-        else:
+        # Acquire the lock to ensure only one tool approval is processed at a time
+        with self.approval_lock:
+            # Show tool call details and ask for approval
             # Use Rich's Text class to safely handle dynamic content with styles
+            panel_content = Text()
+            panel_content.append("Tool Call: ", style="bold yellow")
+            panel_content.append(tool_name, style="")
+            panel_content.append("\nArguments: ", style="bold cyan")
+            panel_content.append(
+                tool_args, style=""
+            )  # Don't apply any style to dynamic content
+
+            # Print a newline before the panel to ensure it starts on a new line
+            console.print()  # Add a blank line to separate from previous output
             console.print(
-                Text(f"Using previously approved tool: {tool_name}", style="green")
+                Panel(
+                    panel_content,
+                    border_style="yellow",
+                )
             )
 
-        # Show loading status for tool execution
-        # Use Rich's Text class to safely handle dynamic content with styles
-        console.print(Text(f"Executing {tool_name}...", style="green"))
-        console.print()  # Add a blank line to separate from the loading indicator
-        self.start_loading(f"Executing {tool_name}")
+            # Ask user for approval if not already approved in all future calls
+            # Escape content to prevent Rich markup issues in typer prompt
+            escaped_tool_name = tool_name.replace("[", "\\[").replace("]", "\\]")
+            if tool_name not in self.shared_approved_tools:
+                approval = typer.prompt(
+                    f"Do you want to allow '{escaped_tool_name}'? (y/Y to approve, n/N to deny, a/A to approve for all future calls)",
+                    type=str,
+                    default="y",
+                ).lower()
+
+                if approval == "a":
+                    # Approve for all future calls in this session
+                    self.shared_approved_tools.add(tool_name)
+                    # Use Rich's Text class to safely handle dynamic content with styles
+                    console.print(
+                        Text(
+                            f"Approved '{tool_name}' for all future calls in this session.",
+                            style="green",
+                        )
+                    )
+                elif approval != "y":
+                    # Use Rich's Text class to safely handle dynamic content with styles
+                    console.print(
+                        Text(
+                            f"Denied '{tool_name}'. Skipping this tool call.",
+                            style="red",
+                        )
+                    )
+                    # Instead of raising an exception, we'll return early to avoid the tool execution
+                    # Unfortunately, this approach doesn't work with LangChain's callback system
+                    # The only way to stop execution is to raise an exception
+                    raise RuntimeError(
+                        f"Tool '{tool_name}' was denied by user. Stopping execution."
+                    )
+            else:
+                # Use Rich's Text class to safely handle dynamic content with styles
+                console.print(
+                    Text(f"Using previously approved tool: {tool_name}", style="green")
+                )
+
+            # Show loading status for tool execution
+            # Use Rich's Text class to safely handle dynamic content with styles
+            console.print(Text(f"Executing {tool_name}...", style="green"))
+            console.print()  # Add a blank line to separate from the loading indicator
+            self.start_loading(f"Executing {tool_name}")
 
     def on_tool_end(self, output, **kwargs):
         """Called when a tool finishes"""
         self.stop_loading()
-        # Use Rich's Text class to safely handle static content with styles
-        completed_text = Text("Tool execution completed.", style="green")
-        console.print(completed_text)
-        console.print()  # Add a blank line to separate from the tool completion message
-        # Don't start loading again - the LLM will resume streaming its response naturally

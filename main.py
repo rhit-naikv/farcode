@@ -77,19 +77,9 @@ def main() -> None:
     )
 
     while True:
-        # Check if we're in the middle of a multi-step command
-        if (
-            hasattr(command_handler, "waiting_for_provider_selection")
-            and command_handler.waiting_for_provider_selection
-        ):
-            user_input = typer.prompt("Enter provider number")
-        elif (
-            hasattr(command_handler, "waiting_for_model_selection")
-            and command_handler.waiting_for_model_selection
-        ):
-            user_input = typer.prompt("Enter model number")
-        else:
-            user_input = typer.prompt("Enter your query")
+        # Get the appropriate prompt based on command handler state
+        prompt_text = command_handler.get_prompt()
+        user_input = typer.prompt(prompt_text)
 
         # Check for empty input
         if not user_input.strip():
@@ -271,11 +261,6 @@ def main() -> None:
             # Print newline after streaming completes
             if has_started_printing_response:
                 console.print()
-
-            # Use Rich's Text class to safely handle static content with styles
-            processing_text = Text()
-            processing_text.append("Processing completed.", style="green")
-            console.print(processing_text)
 
             # Update message history with the AI response
             if full_response:
