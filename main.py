@@ -198,14 +198,14 @@ async def async_main() -> None:
             console.print(Text("\nGoodbye!", style="bold green"))
             break
 
+        # Create a new callback handler for each request
+        callback_handler = LoadingAndApprovalCallbackHandler(
+            shared_approved_tools=approved_tools
+        )
+
         try:
             # Add user message to history
             messages.append(HumanMessage(content=user_input))
-
-            # Create a new callback handler for each request
-            callback_handler = LoadingAndApprovalCallbackHandler(
-                shared_approved_tools=approved_tools
-            )
 
             # Start loading indicator since we're about to start processing
             callback_handler.start_loading("Processing your request...")
@@ -268,6 +268,9 @@ async def async_main() -> None:
                 messages.append(AIMessage(content=full_response))
 
         except Exception as e:
+            # Stop any remaining loading indicators before handling the error
+            callback_handler.stop_loading()
+
             error_msg = str(e)
             # Disable markup parsing to prevent errors from AI-generated Rich
             # markup in error messages
