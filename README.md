@@ -62,6 +62,34 @@ The application provides several tools for the AI agent to use:
 - **Web Search**: DuckDuckGo search integration for current information
 - **AI Model**: Currently configured with openai/gpt-oss-120b model
 
+## Configuration
+
+Farcode supports configuration through a settings file located at `~/.farcode/settings.json`. This file allows you to configure Model Context Protocol (MCP) servers and other advanced options.
+
+### MCP Server Configuration
+
+The settings file supports an `mcpServers` list that allows configuring multiple MCP servers:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "context7",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp",
+        "--api_key",
+        "your_api_key_here"
+      ]
+    }
+  ]
+}
+```
+
+If the settings file does not exist, Farcode will operate with an empty server list.
+
 ## Security Measures
 
 To protect against potential security risks, the application implements the following safeguards:
@@ -70,6 +98,7 @@ To protect against potential security risks, the application implements the foll
 - **Path Validation**: File operations are restricted to the current working directory and subdirectories
 - **Command Timeouts**: Shell commands timeout after 30 seconds to prevent resource exhaustion
 - **Output Truncation**: Response output is limited to prevent information disclosure
+- **Configuration Security**: Configuration files are stored in the user's home directory to prevent accidental exposure
 
 ## Dependencies
 
