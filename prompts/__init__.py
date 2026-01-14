@@ -2,6 +2,9 @@ from pathlib import Path
 
 _PROMPTS_DIR = Path(__file__).parent
 
+# Cache for system prompt to avoid repeated file I/O
+_system_prompt_cache = None
+
 
 def load_prompt(name: str) -> str:
     """Load a prompt file from the prompts directory.
@@ -24,8 +27,13 @@ def load_prompt(name: str) -> str:
 
 
 def load_system_prompt() -> str:
-    """Load the main system prompt for the coding agent."""
-    return load_prompt("system_prompt")
+    """Load the main system prompt for the coding agent (cached after first load)."""
+    global _system_prompt_cache
+
+    if _system_prompt_cache is None:
+        _system_prompt_cache = load_prompt("system_prompt")
+
+    return _system_prompt_cache
 
 
 # Export the main loader

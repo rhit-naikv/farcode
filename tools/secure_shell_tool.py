@@ -154,6 +154,9 @@ class SecureShellTool(BaseTool):
         self.allowed_paths = allowed_paths or [os.getcwd()]
         self.timeout = timeout
 
+        # Pre-resolve allowed paths once during initialization to avoid repeated filesystem operations
+        self._resolved_allowed_paths = [Path(p).resolve() for p in self.allowed_paths]
+
     def _contains_shell_operators(self, command: str) -> bool:
         """
         Check if command contains shell operators that could enable injection.
@@ -307,8 +310,7 @@ class SecureShellTool(BaseTool):
 
                 # Check if the resolved path is within any of the allowed directories
                 is_valid = False
-                for allowed_path in self.allowed_paths:
-                    allowed_resolved = Path(allowed_path).resolve()
+                for allowed_resolved in self._resolved_allowed_paths:
                     try:
                         resolved_path.relative_to(allowed_resolved)
                         is_valid = True

@@ -25,12 +25,19 @@ load_dotenv()
 app = typer.Typer()
 console = Console()
 
+# Cache for tools and system prompt to avoid re-initialization
+_cached_tools = None
+_cached_system_prompt = None
+
 
 async def initialize_agent(
     provider: str = DEFAULT_PROVIDER, model: Optional[str] = None
 ):
     """
     Initialize the LangChain agent with the specified provider and model.
+
+    Tools and system prompt are cached globally since they don't depend on the LLM.
+    Only the LLM provider is recreated when the model changes.
 
     Args:
         provider: LLM provider key from config.PROVIDERS
@@ -39,10 +46,17 @@ async def initialize_agent(
     Returns:
         Configured LangChain agent instance
     """
+    global _cached_tools, _cached_system_prompt
+
     llm = get_llm_provider(provider, model)
-    tools = await get_tools()
-    system_prompt = load_system_prompt()
-    return create_agent(model=llm, tools=tools, system_prompt=system_prompt)
+
+    # Cache tools and system prompt on first use
+    if _cached_tools is None:
+        _cached_tools = await get_tools()
+    if _cached_system_prompt is None:
+        _cached_system_prompt = load_system_prompt()
+
+    return create_agent(model=llm, tools=_cached_tools, system_prompt=_cached_system_prompt)
 
 
 # Initialize command handler
@@ -200,7 +214,7 @@ async def async_main() -> None:
 
             # Track streaming state
             has_started_printing_response = False
-            full_response = ""
+            response_parts = []  # Use list for O(n) performance instead of O(n²) concatenation
 
             # Stream with messages mode for token-by-token streaming
             async for event in shared_state.agent.astream(
@@ -226,7 +240,7 @@ async def async_main() -> None:
                             has_started_printing_response = True
 
                         console.print(content, end="", style="blue", markup=False)
-                        full_response += content
+                        response_parts.append(content)  # O(1) list append
                         sys.stdout.flush()
 
             callback_handler.stop_loading()
@@ -234,7 +248,8 @@ async def async_main() -> None:
             if has_started_printing_response:
                 console.print()
 
-            if full_response:
+            if response_parts:
+                full_response = "".join(response_parts)  # O(n) join operation
                 shared_state.messages.append(AIMessage(content=full_response))
 
         except Exception as e:

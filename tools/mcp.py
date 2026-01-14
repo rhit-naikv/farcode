@@ -110,13 +110,23 @@ def create_mcp_client() -> Optional[MultiServerMCPClient]:
 
 # Global client instance (lazy initialization would be better but keeping existing pattern)
 _client: Optional[MultiServerMCPClient] = None
+_client_init_failed = False  # Cache initialization failures to avoid repeated attempts
 
 
 def _get_client() -> Optional[MultiServerMCPClient]:
     """Get or create the MCP client singleton."""
-    global _client
+    global _client, _client_init_failed
+
+    # If initialization previously failed, don't retry
+    if _client_init_failed:
+        return None
+
     if _client is None:
         _client = create_mcp_client()
+        # Cache the failure so we don't keep trying
+        if _client is None:
+            _client_init_failed = True
+
     return _client
 
 
