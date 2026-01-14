@@ -3,7 +3,7 @@ import shlex
 import subprocess
 from pathlib import Path
 from time import time
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from langchain_core.callbacks import CallbackManagerForToolRun
 from langchain_core.tools import BaseTool
@@ -12,11 +12,33 @@ from pydantic import Field
 # Maximum output length to prevent information disclosure
 MAX_OUTPUT_LENGTH = 10000
 
+# Shell operators that could be used for command injection
+SHELL_OPERATORS: Set[str] = {
+    ";",
+    "&&",
+    "||",
+    "|",
+    ">",
+    ">>",
+    "<",
+    "<<",
+    "&",
+    "`",
+    "$(",
+    ")",
+}
+
 
 class SecureShellTool(BaseTool):
     """
-    A secure version of the shell tool that implements various safeguards to prevent
-    dangerous command execution.
+    A secure shell tool that implements safeguards to prevent dangerous command execution.
+
+    Security features:
+    - Command whitelist/blacklist enforcement
+    - Path validation with symlink resolution
+    - Shell injection prevention (no shell operators, shell=False)
+    - Execution timeout
+    - Output truncation
     """
 
     name: str = "SecureShellTool"
@@ -132,6 +154,21 @@ class SecureShellTool(BaseTool):
         self.allowed_paths = allowed_paths or [os.getcwd()]
         self.timeout = timeout
 
+    def _contains_shell_operators(self, command: str) -> bool:
+        """
+        Check if command contains shell operators that could enable injection.
+
+        Args:
+            command: The raw command string to check
+
+        Returns:
+            bool: True if shell operators are found, False otherwise
+        """
+        for operator in SHELL_OPERATORS:
+            if operator in command:
+                return True
+        return False
+
     def _run(
         self, command: str, run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
@@ -145,9 +182,23 @@ class SecureShellTool(BaseTool):
         Returns:
             str: The output of the command or an error message
         """
+        # Initialize to satisfy static analysis - will be set during parsing
+        parsed_command: List[str] = []
+
         try:
-            # Parse the command to extract the main command
-            parsed_command = shlex.split(command.strip())
+            # Check for shell operators before parsing
+            if self._contains_shell_operators(command):
+                return (
+                    "Error: Command contains shell operators (;, &&, ||, |, >, <, etc.) "
+                    "which are not allowed for security reasons. Please run commands separately."
+                )
+
+            # Parse the command to extract arguments
+            try:
+                parsed_command = shlex.split(command.strip())
+            except ValueError as e:
+                return f"Error: Invalid command syntax - {str(e)}"
+
             if not parsed_command:
                 return "Error: Empty command provided"
 
@@ -161,35 +212,28 @@ class SecureShellTool(BaseTool):
             if main_cmd not in self.allowed_commands:
                 return (
                     f"Error: Command '{main_cmd}' is not in the allowed list. "
-                    f"Allowed commands: {', '.join(self.allowed_commands)}"
+                    f"Allowed commands: {', '.join(sorted(self.allowed_commands))}"
                 )
 
-            # Validate file paths in the command to ensure they are within
-            # allowed paths
-            if not self._validate_file_paths(parsed_command[1:]):
-                return (
-                    f"Error: Command references paths outside of allowed directories. "
-                    f"Allowed paths: {', '.join(self.allowed_paths)}"
-                )
+            # Validate file paths in the command arguments
+            path_error = self._validate_file_paths(parsed_command[1:])
+            if path_error:
+                return path_error
 
-            # Execute the command with a timeout
+            # Execute the command with shell=False for security
             start_time = time()
             result = subprocess.run(
-                command,
-                shell=True,
+                parsed_command,  # Pass as list, not string
+                shell=False,  # Prevent shell injection
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
-                cwd=os.getcwd(),  # Restrict execution to current working directory
+                cwd=os.getcwd(),
             )
 
             execution_time = time() - start_time
 
-            # Check if command timed out
-            if execution_time >= self.timeout:
-                return f"Error: Command exceeded timeout of {self.timeout} seconds"
-
-            # Return stdout and stderr
+            # Build output
             if result.returncode == 0:
                 output = result.stdout
             else:
@@ -208,20 +252,33 @@ class SecureShellTool(BaseTool):
 
         except subprocess.TimeoutExpired:
             return f"Error: Command exceeded timeout of {self.timeout} seconds"
-        except Exception as e:
-            return f"Error: Failed to execute command - {str(e)}"
+        except FileNotFoundError:
+            # parsed_command is guaranteed to be defined here since FileNotFoundError
+            # can only occur during subprocess.run, which happens after parsing
+            cmd_name = parsed_command[0] if parsed_command else "unknown"
+            return f"Error: Command '{cmd_name}' not found"
+        except PermissionError:
+            return "Error: Permission denied to execute command"
+        except OSError as e:
+            return f"Error: OS error while executing command - {str(e)}"
 
-    def _validate_file_paths(self, args: List[str]) -> bool:
+    def _validate_file_paths(self, args: List[str]) -> Optional[str]:
         """
-        Check if any of the command arguments reference paths outside of allowed paths.
+        Validate that command arguments don't reference paths outside allowed directories.
+
+        Resolves symlinks to prevent symlink-based path traversal attacks.
 
         Args:
             args: List of command arguments to validate
 
         Returns:
-            bool: True if all paths are within allowed paths, False otherwise
+            Optional[str]: Error message if validation fails, None if all paths are valid
         """
         for arg in args:
+            # Skip flags (arguments starting with -)
+            if arg.startswith("-"):
+                continue
+
             # Skip if argument doesn't look like a path
             if not (
                 arg.startswith("/")
@@ -232,22 +289,43 @@ class SecureShellTool(BaseTool):
                 continue
 
             try:
-                # Resolve the path and check if it's within allowed paths
-                path_obj = Path(arg).resolve()
+                # Resolve the path including symlinks
+                path_obj = Path(arg)
+
+                # For existing paths, resolve fully (follows symlinks)
+                if path_obj.exists():
+                    resolved_path = path_obj.resolve(strict=True)
+                else:
+                    # For non-existing paths, resolve the parent and append the name
+                    # This prevents attacks using non-existent paths
+                    parent = path_obj.parent
+                    if parent.exists():
+                        resolved_path = parent.resolve(strict=True) / path_obj.name
+                    else:
+                        # Parent doesn't exist, resolve what we can
+                        resolved_path = path_obj.resolve(strict=False)
 
                 # Check if the resolved path is within any of the allowed directories
-                is_valid = any(
-                    str(path_obj).startswith(str(Path(allowed_path).resolve()))
-                    for allowed_path in self.allowed_paths
-                )
+                is_valid = False
+                for allowed_path in self.allowed_paths:
+                    allowed_resolved = Path(allowed_path).resolve()
+                    try:
+                        resolved_path.relative_to(allowed_resolved)
+                        is_valid = True
+                        break
+                    except ValueError:
+                        continue
 
                 if not is_valid:
-                    return False
-            except Exception:
-                # If we can't resolve the path, consider it invalid for security
-                return False
+                    return (
+                        f"Error: Path '{arg}' resolves to '{resolved_path}' which is "
+                        f"outside allowed directories. Allowed paths: {', '.join(self.allowed_paths)}"
+                    )
+            except (OSError, RuntimeError) as e:
+                # If we can't resolve the path, reject it for security
+                return f"Error: Cannot validate path '{arg}' - {str(e)}"
 
-        return True
+        return None
 
 
 def create_secure_shell_tool(**kwargs) -> SecureShellTool:

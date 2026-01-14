@@ -1,69 +1,151 @@
-import json
-from pathlib import Path
+"""Model Context Protocol (MCP) integration for loading external tools."""
 
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import StdioConnection
+from rich.console import Console
+
+# Console for warning/error output
+_console = Console(stderr=True)
+
+# Settings file path (can be overridden via environment variable)
+SETTINGS_PATH = Path(
+    os.environ.get("FARCODE_SETTINGS_PATH", Path.home() / ".farcode" / "settings.json")
+)
 
 
-def load_mcp_config():
-    settings_path = Path.home() / ".farcode" / "settings.json"
+def load_mcp_config() -> List[Dict[str, Any]]:
+    """
+    Load MCP server configuration from settings file.
 
-    if settings_path.exists():
-        with open(settings_path, "r") as f:
-            config = json.load(f)
-            # The mcpServers can be either an array of server configs or an object with server names as keys
-            mcp_servers = config.get("mcpServers", {})
+    Supports two formats:
+    - Array format: [{"name": "server1", "command": "...", "args": [...]}]
+    - Object format: {"server1": {"command": "...", "args": [...]}}
 
-            # If it's already an array, return as is
-            if isinstance(mcp_servers, list):
-                return mcp_servers
-            # If it's an object/dict, convert to array format
-            elif isinstance(mcp_servers, dict):
-                servers_array = []
-                for name, server_config in mcp_servers.items():
-                    # Add the name to the config
-                    server_config_with_name = server_config.copy()
-                    server_config_with_name["name"] = name
-                    # Set default transport if not specified
-                    if "transport" not in server_config_with_name:
-                        server_config_with_name["transport"] = "stdio"
-                    servers_array.append(server_config_with_name)
-                return servers_array
-            else:
-                return []
-    else:
-        # Return empty list as default if settings file doesn't exist
+    Returns:
+        List of server configuration dictionaries
+    """
+    if not SETTINGS_PATH.exists():
         return []
 
+    try:
+        with open(SETTINGS_PATH, "r") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        _console.print(
+            f"[yellow]Warning: Invalid JSON in MCP settings file: {e}[/yellow]"
+        )
+        return []
+    except OSError as e:
+        _console.print(
+            f"[yellow]Warning: Could not read MCP settings file: {e}[/yellow]"
+        )
+        return []
 
-def create_mcp_client():
+    mcp_servers = config.get("mcpServers", {})
+
+    # If it's already an array, return as is
+    if isinstance(mcp_servers, list):
+        return mcp_servers
+
+    # If it's an object/dict, convert to array format
+    if isinstance(mcp_servers, dict):
+        servers_array = []
+        for name, server_config in mcp_servers.items():
+            if not isinstance(server_config, dict):
+                _console.print(
+                    f"[yellow]Warning: Invalid config for MCP server '{name}', skipping[/yellow]"
+                )
+                continue
+            server_config_with_name = server_config.copy()
+            server_config_with_name["name"] = name
+            if "transport" not in server_config_with_name:
+                server_config_with_name["transport"] = "stdio"
+            servers_array.append(server_config_with_name)
+        return servers_array
+
+    return []
+
+
+def create_mcp_client() -> Optional[MultiServerMCPClient]:
+    """
+    Create an MCP client from configuration.
+
+    Returns:
+        MultiServerMCPClient if servers are configured, None otherwise
+    """
     servers_config = load_mcp_config()
 
     if not servers_config:
-        # No servers configured
         return None
 
     servers = {}
     for server_config in servers_config:
-        name = server_config["name"]
-        transport = server_config["transport"]
-        command = server_config["command"]
-        args = server_config["args"]
+        try:
+            name = server_config["name"]
+            transport = server_config.get("transport", "stdio")
+            command = server_config["command"]
+            args = server_config.get("args", [])
 
-        connection = StdioConnection(transport=transport, command=command, args=args)
-        servers[name] = connection
+            connection = StdioConnection(
+                transport=transport, command=command, args=args
+            )
+            servers[name] = connection
+        except KeyError as e:
+            _console.print(
+                f"[yellow]Warning: MCP server config missing required field {e}, skipping[/yellow]"
+            )
+            continue
+
+    if not servers:
+        return None
 
     return MultiServerMCPClient(servers)
 
 
-client = create_mcp_client()
+# Global client instance (lazy initialization would be better but keeping existing pattern)
+_client: Optional[MultiServerMCPClient] = None
 
 
-async def get_mcp_tools():
+def _get_client() -> Optional[MultiServerMCPClient]:
+    """Get or create the MCP client singleton."""
+    global _client
+    if _client is None:
+        _client = create_mcp_client()
+    return _client
+
+
+async def get_mcp_tools() -> List[BaseTool]:
+    """
+    Retrieve tools from configured MCP servers.
+
+    Returns:
+        List of BaseTool instances from MCP servers, empty list if none configured or on error
+    """
+    client = _get_client()
+
+    if client is None:
+        return []
+
     try:
-        if client is None:
-            return []  # Return empty list if no client configured
         return await client.get_tools()
+    except ConnectionError as e:
+        _console.print(
+            f"[yellow]Warning: Could not connect to MCP server: {e}[/yellow]"
+        )
+        return []
+    except TimeoutError as e:
+        _console.print(
+            f"[yellow]Warning: MCP server connection timed out: {e}[/yellow]"
+        )
+        return []
     except Exception as e:
-        print(f"Warning: Could not get MCP tools: {e}")
+        _console.print(
+            f"[yellow]Warning: Could not get MCP tools ({type(e).__name__}): {e}[/yellow]"
+        )
         return []

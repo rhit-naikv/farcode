@@ -2,12 +2,10 @@
 
 from typing import List, Optional, Tuple
 
-from langchain_core.language_models import BaseChatModel
 from rich.console import Console
 from rich.text import Text
 
 from config import PROVIDERS, TOOL_NAMES
-from providers.get_provider import get_llm_provider
 
 
 class CommandHandler:
@@ -324,21 +322,5 @@ class CommandHandler:
         Args:
             message: The info message to display
         """
-        text = Text(f"ℹ {message}", style="yellow")
+        text = Text(f" {message}", style="yellow")
         self.console.print(text)
-
-
-def get_model_for_provider(provider: str, model: str) -> BaseChatModel:
-    """
-    Get a configured LLM instance for the given provider and model.
-
-    Args:
-        provider: Name of the provider (e.g., 'google', 'groq', 'open_router')
-        model: Name of the model to use
-
-    Returns:
-        Configured LLM instance for the specified provider and model
-
-    Uses the dynamic provider system with model override.
-    """
-    return get_llm_provider(provider, model=model)

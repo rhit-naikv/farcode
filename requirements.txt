@@ -1,18 +1,26 @@
-langchain
-langchain-groq
-langchain-google-genai
-langchain-openai
-langchain-community
-langchain-experimental
-langchain-mcp-adapters
-langgraph
-langgraph-checkpoint
-duckduckgo-search
-ddgs
-typer
-rich
-python-dotenv
-pydantic
-urllib3
-pyopenssl
-cryptography
+# Core LangChain ecosystem
+langchain>=0.3.0,<0.4.0
+langchain-groq>=0.2.0,<0.3.0
+langchain-google-genai>=2.0.0,<3.0.0
+langchain-openai>=0.2.0,<0.3.0
+langchain-community>=0.3.0,<0.4.0
+langchain-mcp-adapters>=0.1.0,<0.2.0
+
+# LangGraph for agent orchestration
+langgraph>=0.2.0,<0.3.0
+
+# CLI and UI
+typer>=0.12.0,<0.13.0
+rich>=13.0.0,<14.0.0
+
+# Configuration and validation
+python-dotenv>=1.0.0,<2.0.0
+pydantic>=2.0.0,<3.0.0
+
+# Web search
+duckduckgo-search>=6.0.0,<7.0.0
+
+# HTTP and security
+urllib3>=2.0.0,<3.0.0
+pyopenssl>=24.0.0,<25.0.0
+cryptography>=43.0.0,<44.0.0
